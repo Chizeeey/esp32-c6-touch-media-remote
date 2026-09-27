@@ -51,6 +51,10 @@ media session by itself.
 
 ## Quick start
 
+A board fresh from Waveshare is empty, so flash it first — one command, no
+toolchain needed, see [Flashing the firmware](#flashing-the-firmware). Then set
+up the host side for your machine.
+
 ### Windows
 
 No Python, no dependencies, no administrator rights. Grab the bundle from the
@@ -209,12 +213,36 @@ itself instead of guessing.
 but does not stop the install — the transport goes over D-Bus and does not care
 about the mixer.
 
+## Flashing the firmware
+
+Grab `media_remote-esp32c6-v1.0.0.bin` from the
+[Releases](https://github.com/Chizeeey/esp32-c6-touch-media-remote/releases)
+page. All you need to write it is `esptool`, which is one pip install — not the
+gigabyte of Arduino toolchain:
+
+```bash
+pip install esptool
+esptool --chip esp32c6 --port COM3 --baud 921600 write-flash 0x0 media_remote-esp32c6-v1.0.0.bin
+```
+
+On Linux the port is usually `/dev/ttyACM0`, and you need to be in the group
+that owns it — see the Linux quick start above.
+
+That is the whole 8 MB image, so the board comes up on its defaults: NOK,
+purple, and BTC/ETH/ADA. On a fresh board that is exactly what you want; on a
+board you have already set up, expect to pick your colour and coins again.
+
+The firmware does not report a version over serial yet, so the file name is the
+only thing that tells you which build is on a board.
+
 ## Building the firmware
 
-You do not need this to use the remote, only to change what runs on the board.
+You only need this to change what runs on the board.
 
 `arduino-cli` and the ESP32 core are about a gigabyte of download, and install
-into your home directory without root.
+into your home directory without root. On Windows the shell scripts below will
+not run, but `arduino-cli` itself works the same — compile with the FQBN below
+and pass `-p COM3` to `upload`.
 
 ```bash
 ./scripts/build.sh          # compile

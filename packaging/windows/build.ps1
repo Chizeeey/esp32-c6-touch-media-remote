@@ -55,8 +55,37 @@ Write-Host "  Building the Windows bundle" -ForegroundColor Cyan
 Write-Host "  CPython $PythonVersion  ->  $OutDir"
 Write-Host ""
 
+# Windows PowerShell 5.1 turns anything a native command writes to stderr into
+# an error record, and under $ErrorActionPreference = "Stop" that aborts the
+# script. pip writes ordinary warnings there, so only the exit code can be
+# trusted to say whether a step actually failed.
+function Invoke-Native {
+    param(
+        [Parameter(Mandatory)] [string] $Exe,
+        [Parameter(Mandatory)] [string[]] $Arguments,
+        [Parameter(Mandatory)] [string] $What
+    )
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & $Exe @Arguments
+        if ($LASTEXITCODE -ne 0) {
+            throw "$What failed with exit code $LASTEXITCODE"
+        }
+    } finally {
+        $ErrorActionPreference = $previous
+    }
+}
+
 New-Item -ItemType Directory -Force -Path $work | Out-Null
-if (Test-Path $OutDir) { Remove-Item -Recurse -Force $OutDir }
+if (Test-Path $OutDir) {
+    Remove-Item -Recurse -Force $OutDir
+    # Deleting a large tree over SMB does not always finish by the time the call
+    # returns, and a half-deleted lib/ makes pip skip packages it thinks are
+    # already there.
+    for ($i = 0; $i -lt 20 -and (Test-Path $OutDir); $i++) { Start-Sleep -Milliseconds 250 }
+    if (Test-Path $OutDir) { throw "Could not clear $OutDir" }
+}
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
 # --- 1. the embeddable interpreter ------------------------------------------
@@ -107,15 +136,17 @@ if (-not (Test-Path $getPip)) {
 
 $pipPython = Join-Path $pipDir "python.exe"
 Write-Host "==> Bootstrapping pip"
-& $pipPython $getPip --no-warn-script-location --quiet
-if ($LASTEXITCODE -ne 0) { throw "get-pip.py failed with exit code $LASTEXITCODE" }
+Invoke-Native $pipPython @($getPip, "--no-warn-script-location", "--quiet") "get-pip.py"
 
 # --- 3. the dependencies, into the bundle's lib\ ---------------------------
+# --upgrade so a lib/ that survived the clean is replaced rather than skipped:
+# without it pip only warns, and a stale package would ship.
 $libDir = Join-Path $OutDir "lib"
 Write-Host "==> Installing dependencies into lib\"
-& $pipPython -m pip install --quiet --no-warn-script-location `
-    --target $libDir -r (Join-Path $here "requirements.txt")
-if ($LASTEXITCODE -ne 0) { throw "pip install failed with exit code $LASTEXITCODE" }
+Invoke-Native $pipPython @(
+    "-m", "pip", "install", "--quiet", "--upgrade", "--no-warn-script-location",
+    "--target", $libDir, "-r", (Join-Path $here "requirements.txt")
+) "pip install"
 
 # --- 4. the parts we wrote ourselves ---------------------------------------
 Write-Host "==> Copying the host code and the .bat files"

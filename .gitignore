@@ -6,6 +6,10 @@
 /build/
 /dist/
 
+# Staging area for GitHub release assets: the built bundle and the compiled
+# firmware image. Both belong on the Releases page, never in the history.
+/release/
+
 # Compiled firmware
 *.bin
 *.elf

@@ -1,0 +1,8 @@
+# Batch files must keep CRLF: cmd.exe mishandles goto and labels in LF files.
+*.bat text eol=crlf
+
+# Shell scripts and the bundle's ._pth must keep LF. The template counts: it is
+# what build.ps1 turns into the interpreter's ._pth.
+*.sh text eol=lf
+*._pth text eol=lf
+*._pth.template text eol=lf

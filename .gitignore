@@ -1,0 +1,24 @@
+# The Windows bundle is built, not committed. packaging/windows/build.ps1
+# downloads the embeddable CPython and pip-installs the dependencies into it,
+# which is around 70 MB of binaries that have no business in a git history --
+# and it keeps each dependency's own licence metadata, which a hand-copied
+# lib/ folder loses.
+/build/
+/dist/
+
+# Compiled firmware
+*.bin
+*.elf
+*.map
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Editors and operating systems
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db

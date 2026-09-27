@@ -1,0 +1,5 @@
+python312.zip
+.
+..\lib
+..\host
+import site

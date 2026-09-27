@@ -1,0 +1,10 @@
+# Windows host dependencies. build.ps1 installs these into the bundle's lib/,
+# which is the only place they are needed -- nothing here is installed onto the
+# machine that runs the remote.
+#
+# comtypes and psutil are not listed: pycaw pulls both in, and pinning them
+# here would only invite the two lists to disagree.
+
+pyserial      # the USB CDC link to the board
+pycaw         # Core Audio, for reading and setting an absolute volume level
+winsdk        # the Windows media session, for track title and skip/seek

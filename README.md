@@ -2,7 +2,7 @@
 
 A physical media remote for your PC, built on a Waveshare
 ESP32-C6-Touch-LCD-1.9. Previous, play/pause and next control whatever is
-playing on the machine — Spotify, a YouTube tab, VLC, mpv. Works on **Linux**
+playing on the machine — Spotify, a YouTube tab, VLC. Works on **Linux**
 and **Windows**.
 
 The transport buttons own the screen. Track details and volume live in two
@@ -311,6 +311,12 @@ gdbus call --session --dest org.freedesktop.DBus \
 
 Firefox needs `media.hardwaremediakeys.enabled` set to `true` in `about:config`
 before it registers with MPRIS. Chromium does it by itself.
+
+**mpv does not appear at all.** mpv has no MPRIS support of its own — it needs
+the [mpv-mpris](https://github.com/hoyon/mpv-mpris) plugin, and until that is
+installed the daemon cannot see it. On Windows it stays invisible to the media
+session as well, so only the media-key fallback reaches it: the buttons work,
+but no title and no volume read-back.
 
 **Buttons work but there is no title.** The media session is unavailable. That
 degrades on its own: the buttons keep working, the display just shows no track.

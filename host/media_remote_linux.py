@@ -2,7 +2,7 @@
 """Bridge between the ESP32-C6 touch remote and this desktop's media players.
 
 The firmware sends button presses over USB CDC; this daemon turns them into
-MPRIS calls (Spotify, Firefox/Chrome YouTube tabs, VLC, mpv, ...) and PulseAudio
+MPRIS calls (Spotify, Firefox/Chrome YouTube tabs, VLC, ...) and PulseAudio
 mute toggles, and streams the current track back for the display.
 
 Dependencies are whatever a normal desktop already has: python3, python3-gi

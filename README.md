@@ -132,9 +132,9 @@ Both hosts read it from there.
 
 ## Crypto prices
 
-The top-right button opens spot prices for the coins you picked, in NOK. Each
-coin gets a card with its price, a coloured pill for the last 24 hours, and a
-graph over those same 24 hours.
+The top-right button opens spot prices for the coins you picked, in the
+currency you picked. Each coin gets a card with its price, a coloured pill for
+the last 24 hours, and a graph over those same 24 hours.
 
 Each graph is scaled to its own coin's range rather than a shared one: it shows
 the shape of the day, while the number beside it carries the level. Sharing a
@@ -145,10 +145,12 @@ The board has no network connection. The daemon fetches the prices from
 serial line as everything else. No API key, no WiFi setup on the board. Prices
 refresh every five minutes; if a call fails, the previous values stand.
 
-Prices from 1000 kr up show as whole kroner with a space as the thousands
-separator — "802 234". Below 1000 the decimals come along, "2,41", or ADA would
-read as just "2". Below one krone, four significant digits stay, "0,000142".
-The rules live in `format_nok` in
+Prices from 1000 up show as whole units with the thousands separated — "802 234"
+in NOK, "802,234" in USD. Below 1000 the decimals come along, "2,41", or ADA
+would read as just "2". Below one unit, four significant digits stay,
+"0,000142". Which separators are used follows the currency rather than the
+host's locale, because the person reading the screen picked the currency. The
+rules live in `format_price` in
 [host/remote_common.py](host/remote_common.py).
 
 Formatting happens on the PC and arrives ready-made. The catalogue spans Bitcoin
@@ -162,11 +164,17 @@ refill themselves if the board restarts without the host noticing.
 
 ## Settings
 
-The top-left button opens a panel with two things.
+The top-left button opens a panel with three things.
 
 **Colour.** Six accents. The whole palette — cards, rings, hint text, pressed
 surfaces — is derived from the one colour, so nothing is left behind in the
 previous theme. The background is always true black.
+
+**Currency.** NOK, USD, EUR, GBP or SEK. NOK is the default. Changing it clears
+the prices on screen rather than relabelling them: everything cached is
+denominated in the currency you just left, and showing dollar figures under a
+NOK heading would be worse than showing "--" for the second it takes to
+refetch.
 
 **Coins.** 24 of them in a scrollable list; drag up or down inside it. Between
 one and three can be shown at a time, and the cards share the height according
@@ -177,7 +185,7 @@ The handles at the top and bottom of the screen stay white in every theme. They
 are the only hint that the volume and track panels exist, so they should never
 recede into an accent colour.
 
-Both settings live in the board's flash and survive a power cut. The board sends
+All three live in the board's flash and survive a power cut. The board sends
 your choice to the daemon when they connect, so the host needs no configuration
 of its own — it serves what it is asked for, and only from a list it already
 knows.
@@ -319,6 +327,7 @@ HELLO media-remote esp32c6
 CMD PREV | CMD PLAYPAUSE | CMD NEXT | CMD MUTE
 CMD VOL <0-100>
 CMD COINS <coingecko-id>,<id>,<id>
+CMD CUR <NOK|USD|EUR|GBP|SEK>
 ```
 
 PC → board, about twice a second. This doubles as a host heartbeat: miss it for

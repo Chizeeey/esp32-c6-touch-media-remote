@@ -297,6 +297,8 @@ def handle_command(cmd: str, players: Players, prices: Prices) -> bool:
     if cmd == "MUTE":
         toggle_mute()
         return True
+    if cmd.startswith("CUR "):
+        return prices.set_currency(cmd[4:])
     if cmd.startswith("COINS "):
         return prices.set_coins(cmd[6:].strip().split(","))
     if cmd.startswith("VOL "):

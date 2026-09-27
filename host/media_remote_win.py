@@ -345,6 +345,8 @@ def handle_command(cmd: str, np: NowPlaying, mixer: Mixer,
         except ValueError:
             return False
         return True
+    if cmd.startswith("CUR "):
+        return prices.set_currency(cmd[4:])
     if cmd.startswith("COINS "):
         return prices.set_coins(cmd[6:].strip().split(","))
     LOG.debug("unknown command %r", cmd)

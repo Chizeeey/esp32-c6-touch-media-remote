@@ -12,6 +12,7 @@
 // is closed, so the common case needs no text at all.
 //
 //   device -> host   CMD PREV | CMD PLAYPAUSE | CMD NEXT | CMD MUTE | CMD VOL n
+//                    CMD COINS <id>,<id>,<id> | CMD CUR <code>
 //   host   -> device NP|status|muted|vol|pos|len|title|artist
 //
 // Every frame is composed in an off-screen canvas and pushed in one go; drawing
@@ -66,13 +67,16 @@ static const uint32_t SET_LINGER = 25000;
 static const int16_t SET_BTN_W = 32, SET_BTN_H = 27;
 static const int16_t SET_BTN_X = 8, SET_BTN_Y = 7;
 
-// Settings sheet rows.
-static const int16_t SW_Y = 44, SW_H = 24;      // colour swatches
-static const int16_t ROW_Y = 94, ROW_H = 26;    // coin rows
-static const uint8_t ROWS_VISIBLE = 6;
+// Settings sheet rows. The coin list gave up one row to make space for the
+// currency chips; five still show more than half the catalogue at a time.
+static const int16_t SW_Y = 42, SW_H = 24;      // colour swatches
+static const int16_t CUR_Y = 86, CUR_H = 22;    // currency chips
+static const int16_t CUR_W = 26, CUR_GAP = 3;   // 5 * 26 + 4 * 3 = the swatch span
+static const int16_t ROW_Y = 130, ROW_H = 26;   // coin rows
+static const uint8_t ROWS_VISIBLE = 5;
 static const int16_t VIEW_H = ROWS_VISIBLE * ROW_H;
 static const int16_t ROW_W = SCR_W - 2 * PAD - 8;  // leaves room for the bar
-static const int16_t CLOSE_Y = 258, CLOSE_H = 32;
+static const int16_t CLOSE_Y = 266, CLOSE_H = 32;
 
 // Markets button, top right. It sits above the transport band, inside the
 // top swipe strip: a tap here opens prices, a swipe down still opens details.
@@ -105,11 +109,17 @@ enum { B_PREV = 0, B_PLAY = 1, B_NEXT = 2, B_MUTE = 3 };
 
 // Six accents. The names are ASCII-only: the built-in font has no æ, ø or å.
 static const Theme THEMES[] = {
-    {"Lilla", 167, 139, 250}, {"Cyan", 34, 211, 238},
-    {"Rav", 245, 166, 35},    {"Gronn", 52, 211, 153},
-    {"Rosa", 244, 114, 182},  {"Bla", 96, 165, 250},
+    {"Purple", 167, 139, 250}, {"Cyan", 34, 211, 238},
+    {"Amber", 245, 166, 35},   {"Green", 52, 211, 153},
+    {"Pink", 244, 114, 182},   {"Blue", 96, 165, 250},
 };
 static const uint8_t N_THEMES = sizeof(THEMES) / sizeof(THEMES[0]);
+
+// Currencies the panel offers. The board only ever sends the code; the host
+// knows which CoinGecko parameter and which digit grouping each one means.
+// Keep this in step with CURRENCIES in host/remote_common.py.
+static const char *const CURRENCIES[] = {"NOK", "USD", "EUR", "GBP", "SEK"};
+static const uint8_t N_CURRENCIES = sizeof(CURRENCIES) / sizeof(CURRENCIES[0]);
 
 uint16_t C_ACCENT, C_ACCENT_L, C_ACCENT_D;
 uint16_t C_PANEL, C_CARD, C_RING, C_TEXT, C_DIM;
@@ -158,8 +168,10 @@ uint32_t npHideAt = 0, volHideAt = 0, cxHideAt = 0, setHideAt = 0;
 
 Preferences prefs;
 uint8_t themeIdx = 0;
+uint8_t curIdx = 0;      // index into CURRENCIES; 0 is NOK
 int16_t coinScroll = 0;  // pixels the coin list is scrolled down by
 bool coinsDirty = false;  // selection changed; tell the host on the next loop
+bool curDirty = false;    // ditto for the currency
 
 // Spot prices pushed by the host: the board has no network of its own, and the
 // daemon already has one.
@@ -357,15 +369,15 @@ static void drawNowPlaying(const Layout &L) {
   String label = "NOW PLAYING";
   String title = st.title, artist = st.artist;
   if (!linked) {
-    label = "VENTER";
-    title = "Kobler til";
+    label = "WAITING";
+    title = "Connecting";
     artist = "starting host...";
   } else if (st.status == 0 || title.length() == 0) {
-    label = "STILLE";
-    title = "Ingenting spiller";
+    label = "IDLE";
+    title = "Nothing playing";
     artist = "Spotify, YouTube, VLC";
   } else if (st.status == 2) {
-    label = "PAUSE";
+    label = "PAUSED";
   }
 
   textAt(label, 1, PAD, top + 12, st.status == 1 ? C_ACCENT : C_DIM);
@@ -503,8 +515,8 @@ static void drawCrypto() {
 
   gfx->fillRect(0, top, SCR_W, SCR_H, C_BG);
 
-  textAt("KRYPTO", 1, PAD, top + 12, C_ACCENT);
-  const String unit = "NOK  24T";
+  textAt("CRYPTO", 1, PAD, top + 12, C_ACCENT);
+  const String unit = String(CURRENCIES[curIdx]) + "  24H";
   textAt(unit, 1, SCR_W - PAD - textW(unit, 1), top + 12, C_DIM);
 
   // Cards share out whatever height is left, capped so one lonely coin does
@@ -632,9 +644,9 @@ static void drawSettings() {
       barY + (span ? (int32_t)(VIEW_H - thumbH) * coinScroll / span : 0);
   gfx->fillRoundRect(barX, thumbY, 3, thumbH, 1, C_RING);
 
-  textAt("INNSTILLINGER", 1, PAD, top + 12, C_ACCENT);
+  textAt("SETTINGS", 1, PAD, top + 12, C_ACCENT);
 
-  textAt("FARGE", 1, PAD, top + 32, C_DIM);
+  textAt("COLOUR", 1, PAD, top + 30, C_DIM);
   const int16_t sw = 22, gap = 2;
   for (uint8_t i = 0; i < N_THEMES; i++) {
     const int16_t x = PAD + i * (sw + gap);
@@ -645,13 +657,28 @@ static void drawSettings() {
     }
   }
 
+  textAt("CURRENCY", 1, PAD, top + 74, C_DIM);
+  for (uint8_t i = 0; i < N_CURRENCIES; i++) {
+    const int16_t x = PAD + i * (CUR_W + CUR_GAP);
+    const bool on = (i == curIdx);
+    if (on) {
+      gfx->fillRoundRect(x, top + CUR_Y, CUR_W, CUR_H, 6, C_ACCENT_D);
+      gfx->drawRoundRect(x, top + CUR_Y, CUR_W, CUR_H, 6, C_TEXT);
+    } else {
+      gfx->drawRoundRect(x, top + CUR_Y, CUR_W, CUR_H, 6, C_RING);
+    }
+    const String code = CURRENCIES[i];
+    textAt(code, 1, x + (CUR_W - textW(code, 1)) / 2, top + CUR_Y + 7,
+           on ? C_TEXT : C_DIM);
+  }
+
   char hdr[28];
-  snprintf(hdr, sizeof(hdr), "KRYPTO  %d/%d  (%d)", selN, N_SLOTS, N_CATALOG);
-  textAt(hdr, 1, PAD, top + 80, C_DIM);
+  snprintf(hdr, sizeof(hdr), "CRYPTO  %d/%d  (%d)", selN, N_SLOTS, N_CATALOG);
+  textAt(hdr, 1, PAD, top + 116, C_DIM);
 
   gfx->fillRoundRect(PAD, top + CLOSE_Y, SCR_W - 2 * PAD, CLOSE_H, 10, C_CARD);
   gfx->drawRoundRect(PAD, top + CLOSE_Y, SCR_W - 2 * PAD, CLOSE_H, 10, C_RING);
-  textCentered("LUKK", 1, top + CLOSE_Y + 13, C_ACCENT);
+  textCentered("CLOSE", 1, top + CLOSE_Y + 13, C_ACCENT);
 }
 
 // Small handles at the screen edges, so the hidden panels are discoverable.
@@ -754,6 +781,7 @@ static void showSettings() {
 
 static void saveSettings() {
   prefs.putUChar("theme", themeIdx);
+  prefs.putUChar("cur", curIdx);
   prefs.putUChar("selN", selN);
   prefs.putBytes("sel", sel, N_SLOTS);
 }
@@ -791,12 +819,34 @@ static void handleSettingsTap(int16_t x, int16_t y) {
     }
     return;
   }
+  if (y >= CUR_Y - 4 && y <= CUR_Y + CUR_H + 4) {
+    for (uint8_t i = 0; i < N_CURRENCIES; i++) {
+      const int16_t x0 = PAD + i * (CUR_W + CUR_GAP);
+      if (x >= x0 - 1 && x < x0 + CUR_W + 1) {
+        if (i != curIdx) {
+          curIdx = i;
+          // Everything on screen is priced in the currency we just left.
+          memset(cdata, 0, sizeof(cdata));
+          cxValid = false;
+          curDirty = true;
+          saveSettings();
+        }
+        return;
+      }
+    }
+    return;
+  }
   if (y >= ROW_Y && y < ROW_Y + VIEW_H) {
     const int16_t idx = (y - ROW_Y + coinScroll) / ROW_H;
     if (idx >= 0 && idx < N_CATALOG) toggleCoin((uint8_t)idx);
     return;
   }
   if (y >= CLOSE_Y && y <= CLOSE_Y + CLOSE_H) setOpen = false;
+}
+
+static void sendCurrency() {
+  Serial.print("CMD CUR ");
+  Serial.println(CURRENCIES[curIdx]);
 }
 
 static void sendCoins() {
@@ -998,7 +1048,11 @@ static void applyLine(const String &line) {
   // A new track is worth showing unprompted; it hides itself again.
   if (linked && st.title != oldTitle && st.title.length()) showNP();
 
-  if (!linked) coinsDirty = true;  // a fresh host needs our coin selection
+  if (!linked) {
+    // A fresh host knows neither our coins nor our currency.
+    coinsDirty = true;
+    curDirty = true;
+  }
   linked = true;
   lastHostMs = millis();
   dirty = true;
@@ -1111,6 +1165,7 @@ void setup() {
 
   prefs.begin("remote", false);
   themeIdx = prefs.getUChar("theme", 0) % N_THEMES;
+  curIdx = prefs.getUChar("cur", 0) % N_CURRENCIES;
   selN = (uint8_t)constrain(prefs.getUChar("selN", N_SLOTS), 1, (int)N_SLOTS);
   if (prefs.getBytesLength("sel") == N_SLOTS) {
     prefs.getBytes("sel", sel, N_SLOTS);
@@ -1154,7 +1209,13 @@ void loop() {
   pumpSerial();
   handleTouch();
 
-  if (coinsDirty && linked) {
+  if (linked && curDirty) {
+    // Currency first: it decides what the prices the host is about to fetch
+    // are even denominated in.
+    curDirty = false;
+    sendCurrency();
+  }
+  if (linked && coinsDirty) {
     coinsDirty = false;
     sendCoins();
   }
